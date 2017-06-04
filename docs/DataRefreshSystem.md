@@ -22,11 +22,11 @@ The data refresh component exposes an endpoint that allows, for a given user, to
 The endpoint accepts GET requests with the following structure:
 
 ```
-GET /user/{id}/location?ll=LAT,LONG@acc=ACC
+GET /user/{id}/place?ll=LAT,LONG@acc=ACC
 ```
 
-and returns a [Venue](https://developer.foursquare.com/docs/responses/venue) response body with HTTP status 200
-in case of successful match.
+and returns a Place json object (modelled as a [Venue](https://developer.foursquare.com/docs/responses/venue)) 
+as response body with HTTP status 200 in case of successful match.
 In case of error the service endpoint returns a HTTP 500 status and the message body contains a description
 of the error message.
 
@@ -37,22 +37,32 @@ userid:lat:lang:acc
  
 Redis default strategy (snapshots) is used to persist data on disk.  
 
-Each key pointing to a _visited_place_ is associated with an TTL value of 1 month after which the key will
+Each key pointing to a _visited_place_ is associated with an TTL value of 30 days after which the key will
 be evicted.
 
 
-The Data refresh component is a Spring Boot application.
-The location endpoint is defined in the LocationInfoController which is a Spring Rest Controller.
+The Data refresh component is a Spring Boot application whose structure can be described by the following
+class diagram:
 
-The controller is concerned only with retrieving the query string and creating the response body.
+![Class Diagram](class-diagram.png)
 
-The controller delegates the actual retrieval logic to the LocationInfoService.
+The location endpoint is defined in the PlaceController which is a Spring Rest Controller.
 
-Location object and venue object
+The controller is concerned only with retrieving of the query string and creating the response body.
 
-A FoursquareVenueService is provided as implementation of the LocationInfoService
+The controller delegates the actual retrieval logic to the `PlaceService` which accepts a `Location` value object 
+containing the user id, the latitude, the longitude and the accuracy and returns a `Place` object to be serialized 
+in the response body as a JSON string.
 
-The FoursquareVenueService implements the logic to access the foursquare API (via RestTemplate).
+A `FoursquareVenueService` is provided as an implementation of the `PlaceService`
 
-Spring cache is used to abstract the actual cache implementation. The lookup method is annotated
-with 
+The `FoursquareVenueService` implements the logic to access the Foursquare API (via RestTemplate).
+
+Spring cache is used to abstract the actual cache implementation. 
+The `lookup` method is annotated with `@Cacheable` annotation. The name of the cache is `places`.
+The `Location` object shall be used as cache key and therefore shall implement valid `equal` and `hashCode` methods.
+
+[Redisson](https://github.com/redisson/redisson/wiki/14.-Integration%20with%20frameworks#142-spring-cache) is used as
+ Spring Cache manager implementation. In the cache manager implementation a TTL of 30 days shall be defined.
+ 
+ This will make sure that each cache entry is defined in Redis with the right TTL value. 
