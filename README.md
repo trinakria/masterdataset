@@ -12,7 +12,7 @@ java -jar target/master-dataset-1.0-SNAPSHOT.jar generate input_folder file_size
 ```
 For instance
 ```shell
-java -jar target/master-dataset-1.0-SNAPSHOT.jar generate generate sentiance 15 locations,64,sensors,138,devices,24
+java -jar target/master-dataset-1.0-SNAPSHOT.jar generate sentiance 15 locations,64,sensors,138,devices,24
 ```
 
 **To enlarge an existing master data set, execute:**
