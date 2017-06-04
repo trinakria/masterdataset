@@ -221,7 +221,7 @@ public class MasterDataSetSpec {
                 ", inputFolder=" + inputFolder +
                 ", fileSize=" + fileSize +
                 ", dataSets=" + dataSets +
-                ", backupFolder=" + backupFolder.get() +
+                ", backupFolder=" + backupFolder +
                 '}';
     }
 }
