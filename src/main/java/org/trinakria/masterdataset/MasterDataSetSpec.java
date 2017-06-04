@@ -8,17 +8,27 @@ import org.apache.commons.lang3.Validate;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static java.lang.String.format;
+import static org.trinakria.masterdataset.MasterDataSetSpec.Mode.BACKUP;
+import static org.trinakria.masterdataset.MasterDataSetSpec.Mode.GENERATE;
+import static org.trinakria.masterdataset.MasterDataSetSpec.Mode.UPDATE;
 
 /**
- * Created by Mario on 02/06/2017.
+ * A specification to be used to handle a master data set.
+ *
+ * @author Mario Giurlanda
  */
 public class MasterDataSetSpec {
 
+    /**
+     * Mode of operation on the data set.
+     */
     public enum Mode {
-        GENERATE, UPDATE
+        GENERATE, UPDATE, BACKUP
     }
 
     public static final int ONE_MB = 1024 * 1024;
@@ -26,45 +36,90 @@ public class MasterDataSetSpec {
     private static final int PARTITION_SIZE = 2;
     static final String FILENAME_TEMPLATE = "file%d.txt";
 
+    /**
+     * Master data set input folder/
+     */
     private final Path inputFolder;
+    /**
+     * Max size of a file within a data set
+     */
     private final long fileSize;
+    /**
+     * Lists of data set that are part of the master data set
+     */
     private final List<DataSet> dataSets;
+    /**
+     * Mode of operation on the data set
+     */
     private final Mode mode;
+    /**
+     * Optional back up folder to be used in case of {@link Mode#BACKUP}
+     */
+    private final Optional<Path> backupFolder;
 
     public MasterDataSetSpec(Mode mode, Path inputFolder, long fileSize, List<DataSet> dataSets) {
+        this(mode, inputFolder, fileSize, dataSets, Optional.empty());
+    }
+
+    public MasterDataSetSpec(Mode mode, Path inputFolder, long fileSize, List<DataSet> dataSets, Optional<Path> backupFolder) {
         this.inputFolder = inputFolder;
         this.fileSize = fileSize;
         this.dataSets = dataSets;
         this.mode = mode;
+        this.backupFolder = backupFolder;
     }
 
+    /**
+     * Factory method that creates a specification from an array of args.
+     * @param args arguments
+     * @return a {@MasterDataSetSpec}
+     */
     public static MasterDataSetSpec fromArgs(String[] args) {
-        Validate.notEmpty(args, "Following args, separated by white space, are expected: \n" +
-                "mode (GENERATE or UPDATE) \n" +
-                "input folder \n" +
-                "file size (mandatory in case of Generate mode)\n" +
-                "data set structure");
+        Validate.notEmpty(args, "Usage: \n" +
+                "GENERATE input_folder file_size <name1,size1>,<name2,size2> \n" +
+                "UPDATE input_folder <name1,size1>,<name2,size2> \n" +
+                "BACKUP input_folder backup_folder");
+
         Mode mode = Mode.valueOf(args[0].toUpperCase());
         Path inputFolderArg = Paths.get(args[1]);
         long fileSize = 0;
-        String structureStr = StringUtils.EMPTY;
-        if (mode == Mode.GENERATE) {
-            Validate.isTrue(args.length == 4, "4 args are expected: mode, input folder, file size, data set structure");
-            fileSize = toLong(args[2]);
-            Validate.isTrue(fileSize >= 0, "File size must be a positive number");
-            structureStr = args[3];
-        } else if (mode == Mode.UPDATE) {
-            Validate.isTrue(args.length == 3, "3 args are expected: mode, input folder, file size, data set structure");
-            structureStr = args[2];
+        List<DataSet> structure = Collections.EMPTY_LIST;
+        Optional<Path> backupFolder = Optional.empty();
+
+        switch (mode) {
+            case GENERATE: {
+                Validate.isTrue(args.length == 4, "4 args are expected: GENERATE, input_folder, file_size <name1,size1>,<name2,size2>");
+                fileSize = toLong(args[2]);
+                Validate.isTrue(fileSize >= 0, "file_size must be a positive number");
+                structure = parseDataSetStructure( args[3]);
+                break;
+            }
+            case UPDATE: {
+                Validate.isTrue(args.length == 3, "3 args are expected: UPDATE, input_folder, <name1,size1>,<name2,size2>");
+                structure = parseDataSetStructure(args[2]);
+                break;
+            }
+            case BACKUP: {
+                Validate.isTrue(args.length == 3, "3 args are expected: BACKUP, input_folder, backup_folder");
+                backupFolder = Optional.of(Paths.get(args[2]));
+                break;
+            }
+            default: {
+                throw new IllegalArgumentException(format("Unknown mode %s", mode));
+            }
         }
 
+        return new MasterDataSetSpec(mode, inputFolderArg, fileSize, structure, backupFolder);
+    }
+
+    private static List<DataSet> parseDataSetStructure(String structureStr) {
         List<DataSet> structure = new ArrayList<>();
         Iterable<String> split = Splitter.on(DELIMITER).split(structureStr);
         for (List<String> partition : Iterables.partition(split, PARTITION_SIZE)) {
             Validate.isTrue(partition.size() == PARTITION_SIZE, "Unmatched data set structure. Expected <name1>,<size1>,<name2>,<size2>");
             structure.add(DataSet.of(partition.get(0), toLong(partition.get(1))));
         }
-        return new MasterDataSetSpec(mode, inputFolderArg, fileSize, structure);
+        return structure;
     }
 
     public Path inputFolder() {
@@ -93,6 +148,10 @@ public class MasterDataSetSpec {
 
     public Mode mode() {
         return mode;
+    }
+
+    public Optional<Path> backupFolder() {
+        return backupFolder;
     }
 
     public static final class DataSet {
@@ -162,6 +221,7 @@ public class MasterDataSetSpec {
                 ", inputFolder=" + inputFolder +
                 ", fileSize=" + fileSize +
                 ", dataSets=" + dataSets +
+                ", backupFolder=" + backupFolder.get() +
                 '}';
     }
 }
